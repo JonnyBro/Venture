@@ -121,7 +121,7 @@ struct Graph {
   }
 };
 Result entitlement_handler(Provider& p, const RequestArgs&, std::stop_token stop) {
-  return {{}, {}, {}, {"String", {{"Value", "entitled"}}}};
+  return p.entitlement(stop);
 }
 Result user_handler(Provider& p, const RequestArgs&, std::stop_token stop) {
   auto r = p.logged_in_user(stop);

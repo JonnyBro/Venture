@@ -53,6 +53,10 @@ Core::Core(Options options)
   else if (!steam_sync_allowed_)
     log::info("steam", "Steam sync disabled: redirected data profile has no Steam root override.");
   action([&] { settings_ = library::Settings::load(data_); });
+  // Offline mode is the saved form of --offline: no Meta request starts, and
+  // games launch with a local Platform identity.
+  offline_forced_ = options_.offline;
+  options_.offline = offline_forced_ || settings_.offline_mode;
   log::set_level(static_cast<log::Level>(settings_.log_level));
   i18n::set_language(options_.language.empty() ? settings_.interface_language : options_.language);
   log::info("launcher", "Interface language: {}", i18n::language());
@@ -1382,6 +1386,11 @@ void Core::set_show_hidden(bool show) {
   settings_.save(data_);
 }
 // The library's Installed filter, remembered without a rescan.
+void Core::set_offline_mode(bool enabled) {
+  settings_.offline_mode = enabled;
+  options_.offline = offline_forced_ || enabled;
+  settings_.save(data_);
+}
 void Core::set_installed_only(bool installed_only) {
   if (installed_only == settings_.installed_only) return;
   settings_.installed_only = installed_only;
@@ -1750,7 +1759,8 @@ void Core::launch_game(std::string_view id, std::string_view requested,
         return f.kind == "asset" && !f.id.empty() && f.asset_type.empty();
       });
   std::string catalog_token;
-  if ((!i->plan.launcher_format || no_assets || untyped_assets) && !i->plan.local &&
+  const bool offline = options_.offline;
+  if (!offline && (!i->plan.launcher_format || no_assets || untyped_assets) && !i->plan.local &&
       !choice.account_key.empty())
     if (auto owner = vault_.load(choice.account_key))
       catalog_token = owner->access_token;
@@ -1786,7 +1796,7 @@ void Core::launch_game(std::string_view id, std::string_view requested,
                 ? "Preparing application credentials..."
                 : "Updating the installation manifest from Meta...";
   worker_->submit([this, install, app_id, key, runtime, root, details, reply,
-                   console, catalog_token](std::stop_token stop) -> Worker::Completion {
+                   console, catalog_token, offline](std::stop_token stop) -> Worker::Completion {
     try {
       if (reply) {
         std::lock_guard lock(reply->mutex);
@@ -1824,8 +1834,12 @@ void Core::launch_game(std::string_view id, std::string_view requested,
       ovrplatform::AppIdentity identity{
           install.plan.app_id, install.plan.package, install.plan.binary_id,
           static_cast<std::int64_t>(std::stoll(install.plan.version_code))};
+      // Offline launches never use Meta credentials. The broker still serves
+      // launch details to the runtime, so it starts as a local (no-account)
+      // one; the game's saves stay in the account's folder.
+      const auto broker_key = offline ? std::string("local") : key;
       auto broker = std::make_shared<ovrplatform::CredentialBroker>(
-          identity, key, ovrplatform::runtime_secret_store(key),
+          identity, broker_key, ovrplatform::runtime_secret_store(broker_key),
           ovrplatform::meta_http_transport());
       auto error = broker->prepare(stop);
       if (error)
@@ -1833,7 +1847,7 @@ void Core::launch_game(std::string_view id, std::string_view requested,
       if (stop.stop_requested())
         throw std::runtime_error("Game launch cancelled.");
       return [this, install, app_id, key, runtime, root, console, broker,
-              details, reply, catalog = std::move(catalog)] {
+              details, reply, offline, catalog = std::move(catalog)] {
         launch_pending_.erase(app_id);
         if (reply && !reply->begin()) {
           game_locks_.erase(app_id);
@@ -1880,6 +1894,8 @@ void Core::launch_game(std::string_view id, std::string_view requested,
               "--log",        paths::utf8(r.log),
               "--account",    key,
               "--parent-pid", std::to_string(current_process_id())};
+          if (offline)
+            args.push_back("--offline");
           if (console)
             args.push_back("--console");
           if (options_.smoke_seconds)

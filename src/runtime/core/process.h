@@ -54,6 +54,9 @@ struct ProcessConfig {
   std::string account_key = "local";
   std::filesystem::path guest_cache_dir;
   bool platform_leaderboard_writes = true; // per-launch opt-out, owner-authorized by default
+  // Offline mode (launcher setting or --offline): games get a local Platform
+  // identity and never contact Meta. Saves stay in the account's folder.
+  bool platform_offline = false;
   bool embedded_java_scripts = false; // tooling agent needed only for prepared Java loaders
   bool has_code = true; // classes.dex present; a native-only APK (hasCode="false") has none
   // VENTURE_PASSTHROUGH (on unless "0"), captured once before guest/XR initialization.

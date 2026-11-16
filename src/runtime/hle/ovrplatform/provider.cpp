@@ -28,6 +28,76 @@ Error response_error(const HttpResponse& response, Json& body) {
   body = Json::parse(response.body, nullptr, false);
   return {};
 }
+// A profile that exists only on this PC. Its id is stable so saves and any
+// local platform state keep one identity between launches; it is never sent to
+// Meta.
+constexpr Id kLocalUserId = 1000000000000001;
+constexpr std::string_view kLocalAlias = "local";
+constexpr std::string_view kLocalDisplayName = "Offline Player";
+
+class Offline final : public Provider {
+ public:
+  explicit Offline(AppIdentity app) : app_(std::move(app)) {}
+  Error prepare() override { return {}; }
+  void declare_app_id(std::string_view id) override { app_.app_id = std::string(id); }
+  Result entitlement(std::stop_token) override { return {}; }
+  Result logged_in_user(std::stop_token) override {
+    return {{}, {kLocalUserId, std::string(kLocalAlias), std::string(kLocalDisplayName)}, {}};
+  }
+  Result access_token(std::stop_token) override {
+    return {{}, {kLocalUserId, std::string(kLocalAlias), std::string(kLocalDisplayName)}, "offline"};
+  }
+  Result user_proof(std::stop_token) override { return {{}, {}, "offline"}; }
+  // A local heartbeat: nothing is sent, but presence updates complete and the
+  // game keeps calling them normally.
+  Result heartbeat(std::string_view, std::stop_token) override { return {{}, {}, "3600"}; }
+  Result service(std::string_view name, const RequestArgs& args,
+                 std::stop_token) override {
+    if (args.error) return {args.error};
+    if (name == "ovr_User_Get") {
+      Result r;
+      r.model = user_model(kLocalUserId, std::string(kLocalAlias),
+                           std::string(kLocalDisplayName));
+      return r;
+    }
+    if (name == "ovr_User_GetOrgScopedID") {
+      Result r;
+      r.model = {"OrgScopedID", {{"ID", kLocalUserId}}};
+      return r;
+    }
+    if (name == "ovr_UserAgeCategory_Get") {
+      Result r;
+      // AD: an adult account, so offline play is not age-gated.
+      r.model = {"UserAccountAgeCategory", {{"AgeCategory", std::int32_t(3)}}};
+      return r;
+    }
+    // No purchases can be read offline. An empty, successful list lets games
+    // start; paid add-ons stay unavailable until the game runs with Meta.
+    if (name == "ovr_IAP_GetViewerPurchases" ||
+        name == "ovr_IAP_GetViewerPurchasesDurableCache" ||
+        name == "ovr_IAP_GetNextPurchaseArrayPage") {
+      Result r;
+      r.model = {"PurchaseArray"};
+      return r;
+    }
+    if (name == "ovr_IAP_GetProductsBySKU" ||
+        name == "ovr_IAP_GetNextProductArrayPage") {
+      Result r;
+      r.model = {"ProductArray"};
+      return r;
+    }
+    if (name == "ovr_IAP_ConsumePurchase") return {};
+    // Checkout needs Meta's payment UI, exactly as on a standalone device.
+    return {unsupported_operation(name)};
+  }
+  HttpResponse graph_request(HttpRequest, std::stop_token) override {
+    return {0, {}, failure(ErrorCode::unavailable)};
+  }
+
+ private:
+  AppIdentity app_;
+};
+
 class OwnedLibrary final : public Provider {
  public:
   OwnedLibrary(AppIdentity app, LaunchCredentials stores,
@@ -380,7 +450,7 @@ class OwnedLibrary final : public Provider {
       }
       const bool entitled = item["is_viewer_entitled"].get<bool>();
       log::info("ovrplatform", "Entitlement from the app's store listing: {}", entitled ? "owned" : "not owned");
-      return Result{};
+      return entitled ? Result{} : Result{failure(ErrorCode::not_entitled)};
     } catch (...) {
       return {};
     }
@@ -592,6 +662,9 @@ std::shared_ptr<Provider> owned_library_provider(
     std::shared_ptr<HttpTransport> http) {
   return owned_library_provider(std::move(app), LaunchCredentials{store, store},
                                 std::move(http));
+}
+std::shared_ptr<Provider> offline_provider(AppIdentity app) {
+  return std::make_shared<Offline>(std::move(app));
 }
 std::shared_ptr<Provider> owned_library_provider(
     AppIdentity app, LaunchCredentials stores,

@@ -17,11 +17,17 @@ std::unique_ptr<Session> make_runtime_session(
     const AppIdentity& app, const std::filesystem::path& install,
     std::shared_ptr<PipeChannel> channel) {
   auto http = meta_http_transport();
-  auto provider = channel
-      ? brokered_provider(app, process_config().account_key, channel, http)
-      : owned_library_provider(
-            app, runtime_secret_store(process_config().account_key), http);
-  if (!channel)
+  const bool offline = process_config().platform_offline ||
+                       process_config().account_key == "local";
+  auto provider = offline
+      ? offline_provider(app)
+      : channel
+            ? brokered_provider(app, process_config().account_key, channel, http)
+            : owned_library_provider(
+                  app, runtime_secret_store(process_config().account_key), http);
+  if (offline)
+    log::info("accounts", "Offline mode: the game gets a local Platform identity.");
+  else if (!channel)
     log::warn("accounts",
               "CLI credential fallback: the launching account's profile token is "
               "readable by game code. Use the launcher for credential isolation.");
