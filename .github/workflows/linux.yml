@@ -16,6 +16,16 @@ on:
       package:
         type: boolean
         default: false
+  workflow_dispatch:
+    inputs:
+      test:
+        description: Run tests
+        type: boolean
+        default: true
+      package:
+        description: Package the release
+        type: boolean
+        default: true
 
 permissions:
   contents: read

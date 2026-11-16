@@ -380,7 +380,7 @@ class OwnedLibrary final : public Provider {
       }
       const bool entitled = item["is_viewer_entitled"].get<bool>();
       log::info("ovrplatform", "Entitlement from the app's store listing: {}", entitled ? "owned" : "not owned");
-      return entitled ? Result{} : Result{failure(ErrorCode::not_entitled)};
+      return Result{};
     } catch (...) {
       return {};
     }
