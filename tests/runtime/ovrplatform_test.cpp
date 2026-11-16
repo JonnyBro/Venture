@@ -444,6 +444,38 @@ TEST_CASE("Platform Unity native-message unwrap preserves user and proof payload
   }
 }
 
+TEST_CASE("Offline provider signs a local user in and grants entitlement") {
+  optest::Arena arena;
+  Session session(optest::app(), offline_provider(optest::app()), arena.memory());
+  REQUIRE(session.initialize(optest::app().app_id) == InitResult::success);
+  CHECK(session.initialized());
+  CHECK(session.logged_in_user_id() != 0);
+
+  const auto entitlement = session.request(optest::spec("ovr_Entitlement_GetIsViewerEntitled"));
+  const auto message = optest::wait_pop(session);
+  CHECK(session.get(message, "ovr_Message_GetRequestID") == entitlement);
+  CHECK(session.get(message, "ovr_Message_IsError") == 0);
+  session.free_message(message);
+
+  session.request(optest::spec("ovr_User_GetLoggedInUser"));
+  const auto user_message = optest::wait_pop(session);
+  REQUIRE(session.get(user_message, "ovr_Message_IsError") == 0);
+  const auto user = session.get(user_message, "ovr_Message_GetUser");
+  REQUIRE(user != 0);
+  CHECK(session.get(user, "ovr_User_GetID") == session.logged_in_user_id());
+  session.free_message(user_message);
+
+  // Purchases answer with an empty, successful list rather than a network error.
+  session.request(optest::spec("ovr_IAP_GetViewerPurchases"));
+  const auto purchases = optest::wait_pop(session);
+  CHECK(session.get(purchases, "ovr_Message_IsError") == 0);
+  const auto array = session.get(purchases, "ovr_Message_GetPurchaseArray");
+  REQUIRE(array != 0);
+  CHECK(session.get(array, "ovr_PurchaseArray_GetSize") == 0);
+  session.free_message(purchases);
+  CHECK(arena.live == 0);
+}
+
 TEST_CASE("Platform enum ToString and FromString use the SDK's names") {
   optest::Arena arena;
   Session session(optest::app(), std::make_shared<optest::FakeProvider>(), arena.memory());

@@ -44,21 +44,21 @@ PipeChannel::Handler asset_launcher_handler(Manager& manager, fs::path data,
            name = str(request, "name");
       if (!op.starts_with("asset.") || !digits(id) ||
           !paths::safe_name(name))
-        return {{"ok", true}};
+        return {{"ok", false}};
       auto index = meta::AccountVault(data).index();
       auto entry = index.find(account);
       if (!entry || !entry->signed_in || entry->needs_reauth)
-        return {{"ok", true}};
+        return {{"ok", false}};
       if (!paths::within(install, install / "plan.json"))
-        return {{"ok", true}};
+        return {{"ok", false}};
       auto plan = meta::parse_plan(paths::read_json(install / "plan.json"));
       auto file = std::ranges::find(plan.files, name, &meta::File::name);
       if (plan.app_id != app || plan.binary_id != binary ||
           file == plan.files.end() || file->kind != "asset" || file->id != id)
-        return {{"ok", true}};
+        return {{"ok", false}};
       if (op == "asset.download") {
         auto session = meta::AccountVault(data).load(account);
-        if (!session) return {{"ok", true}};
+        if (!session) return {{"ok", false}};
         manager.enqueue_asset(app, root, binary, id, name,
                               session->access_token, account, pinned);
       } else if (op == "asset.cancel") {
@@ -68,7 +68,7 @@ PipeChannel::Handler asset_launcher_handler(Manager& manager, fs::path data,
         return {{"ok", true},
                 {"success", manager.delete_asset(install, app, binary, name)}};
       } else if (op != "asset.status")
-        return {{"ok", true}};
+        return {{"ok", false}};
       for (auto& job : manager.snapshot(account))
         if (job.app_id == app && job.binary_id == binary && job.pinned == pinned &&
             job.asset_id == id && job.asset_name == name)
@@ -79,7 +79,7 @@ PipeChannel::Handler asset_launcher_handler(Manager& manager, fs::path data,
                   {"generation", job.generation}};
       return {{"ok", true}, {"state", -1}, {"done", 0}, {"total", file->size}};
     } catch (...) {
-      return {{"ok", true}};
+      return {{"ok", false}};
     }  // Never return vault/network exception text.
   };
 }

@@ -64,8 +64,8 @@ else()
   set(CURL_USE_OPENSSL ON CACHE BOOL "" FORCE)
 endif()
 FetchContent_Declare(curl
-  URL https://github.com/curl/curl/archive/fdb8a789d2b446b77bd7cdd2eff95f6cbc814cf4.tar.gz # curl-8_14_1
-  URL_HASH SHA256=64205466b2b9c1fd6fc44a8b765842edd67ed1a3a7df554d68efcf117eca8925
+  URL https://github.com/curl/curl/archive/3163ec065643ba20709f190111f42c3e1fe95273.tar.gz # curl-8_23_0
+  URL_HASH SHA256=9dc0b74994d293d99dd57ec46193b8c9017298b8bc2481d026ef5a2b5edeb759
   SYSTEM)
 FetchContent_MakeAvailable(curl)
 

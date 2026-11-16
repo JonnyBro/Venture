@@ -863,6 +863,7 @@ Settings Settings::load(const fs::path &data) {
         s.hidden.insert(id.get<std::string>());
   s.show_hidden = field(j, "showHiddenGames") == true;
   s.installed_only = field(j, "libraryInstalledOnly") == true;
+  s.offline_mode = field(j, "offlineMode") == true;
   return s;
 }
 void Settings::save(const fs::path &data) const {
@@ -893,7 +894,8 @@ void Settings::save(const fs::path &data) const {
          {"steamSkip", steam_skip},
          {"hiddenGames", hidden},
          {"showHiddenGames", show_hidden},
-         {"libraryInstalledOnly", installed_only}};
+         {"libraryInstalledOnly", installed_only},
+         {"offlineMode", offline_mode}};
   {
     Json games = Json::object();
     for (const auto& [id, config] : game_controls) games[id] = Json::parse(controls::encode(config));

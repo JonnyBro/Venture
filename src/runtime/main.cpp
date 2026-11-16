@@ -233,6 +233,7 @@ int main(int argc, char** argv) {
     std::uintptr_t credential_read = 0, credential_write = 0;
     bool inspect = false, boot_native = false, defer_gpu = false, test_a32_memory = false;
     bool leaderboard_writes = true;
+    bool offline = false;
     bool runtime_worker = false, console = false;
     std::uint32_t parent_pid = 0;
     double run_seconds = 0;
@@ -268,6 +269,7 @@ int main(int argc, char** argv) {
       else if (option == "--boot-native") boot_native = true;
       else if (option == "--defer-gpu") defer_gpu = true;
       else if (option == "--no-leaderboard-writes") leaderboard_writes = false;
+      else if (option == "--offline") offline = true;
       else if (option == "--test-a32-memory")
         test_a32_memory = true;
       else if (option == "--run-guest-test") guest_test = venture::paths::from_utf8(value());
@@ -300,7 +302,8 @@ int main(int argc, char** argv) {
                      "--run-seconds <seconds>\n"
                      "Account selection: --account <12-hex-key> (defaults to "
                      "active account)\n"
-                     "Platform option: --no-leaderboard-writes (disable score submissions for this launch)\n"
+                     "Platform options: --no-leaderboard-writes (disable score submissions for this launch),\n"
+                     "  --offline (local Platform identity; no Meta requests)\n"
                      "Diagnostic option: --defer-gpu (initialize graphics on "
                      "first guest use)\n"
                      "Memory test: --test-a32-memory (reserve low arena and "
@@ -456,7 +459,7 @@ int main(int argc, char** argv) {
     venture::log::info("launch", "Configuring installed game {}", venture::paths::utf8(game));
     const auto index = venture::meta::AccountVault(venture::paths::data_dir()).index();
     if (account_key.empty()) account_key = index.active;
-    if (!account_key.empty() && account_key != "local") {
+    if (!offline && !account_key.empty() && account_key != "local") {
       auto account = index.find(account_key);
       if (!account || !account->signed_in || (broker && account->needs_reauth))
         throw std::runtime_error(
@@ -466,6 +469,9 @@ int main(int argc, char** argv) {
     venture::initialize_diagnostic_trace();
     venture::configure_game(game, package,
                        account_key.empty() ? "local" : account_key);
+    venture::process_config().platform_offline = offline;
+    if (offline)
+      venture::log::info("accounts", "Offline mode: no Meta requests will be made for this launch.");
     venture::AddressSpace::get().initialize(venture::process_config().isa());
     venture::log::info("launch", "Validating cached {} libraries", venture::process_config().abi);
     auto libraries = venture::extract_native_libraries();

@@ -197,6 +197,9 @@ protected:
   bool hidden(std::string_view app_id) const { return settings_.hidden.contains(std::string(app_id)); }
   void set_show_hidden(bool show);
   void set_installed_only(bool installed_only);
+  // Saves the offline-mode choice and applies it to this run too (--offline
+  // still forces it on).
+  void set_offline_mode(bool enabled);
   struct LaunchRequest {
     std::string target, account;
     LaunchDetails details;
@@ -217,6 +220,7 @@ protected:
   static Json request_launch(const std::shared_ptr<LaunchQueue>&, const std::string&, const Json&);
   void launch_game(std::string_view, std::string_view, const LaunchDetails&,
                    std::shared_ptr<LaunchRequest> = {});
+  bool offline_forced_ = false;  // --offline: this run stays offline
   std::string selected_, notice_, warning_, auth_status_;
   bool library_partial_ = false;  // Meta did not confirm the whole library
   bool rescan_again_ = false;  // rescan() was asked for while a scan ran

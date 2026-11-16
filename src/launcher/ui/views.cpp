@@ -1947,6 +1947,14 @@ void App::draw_settings() {
                             tr("Finds an imported game's store page on OculusDB. Only its package name is sent."),
                             kHelpIcon);
               });
+  divider();
+  setting_row("Offline mode",
+              "Runs installed games with a local profile, without signing in to Meta. Downloads, the library "
+              "refresh and online features need it off.",
+              s(44), s(24), [&] {
+                if (toggle("offline-mode", &settings_.offline_mode))
+                  action([this, enabled = settings_.offline_mode] { set_offline_mode(enabled); });
+              });
   if (steam_pending_ && settings_.add_games_to_steam) {
     divider();
     float bw = row_button_w(steam_restart_ ? "Waiting for Steam to close" : "Restart Steam");

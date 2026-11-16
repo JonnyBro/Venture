@@ -147,6 +147,11 @@ std::shared_ptr<Provider> owned_library_provider(
     AppIdentity, std::shared_ptr<SecretStore>, std::shared_ptr<HttpTransport>);
 std::shared_ptr<Provider> owned_library_provider(
     AppIdentity, LaunchCredentials, std::shared_ptr<HttpTransport>);
+// Offline mode: a local profile that never contacts Meta. Games see a signed-in
+// user and a successful entitlement, while anything that needs Meta's servers
+// (IAP, presence, leaderboards) answers as unavailable. Used when the launch
+// has no account and when the launcher starts a game in offline mode.
+std::shared_ptr<Provider> offline_provider(AppIdentity);
 
 // Separate feasibility diagnostic. Never exposes candidate tokens to guest
 // code; success means only that Meta returned a candidate, not proven scope.
