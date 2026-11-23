@@ -1955,6 +1955,16 @@ void App::draw_settings() {
                 if (toggle("offline-mode", &settings_.offline_mode))
                   action([this, enabled = settings_.offline_mode] { set_offline_mode(enabled); });
               });
+  if (options_.offline) {
+    divider();
+    setting_row("Block the game's network",
+                "In offline mode, games reach only this PC. Without internet they stop waiting on connection "
+                "timeouts; their own online play stays off.",
+                s(44), s(24), [&] {
+                  if (toggle("offline-block-network", &settings_.block_game_network))
+                    action([this, enabled = settings_.block_game_network] { set_block_game_network(enabled); });
+                });
+  }
   if (steam_pending_ && settings_.add_games_to_steam) {
     divider();
     float bw = row_button_w(steam_restart_ ? "Waiting for Steam to close" : "Restart Steam");

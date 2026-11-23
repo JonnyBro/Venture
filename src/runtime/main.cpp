@@ -233,7 +233,7 @@ int main(int argc, char** argv) {
     std::uintptr_t credential_read = 0, credential_write = 0;
     bool inspect = false, boot_native = false, defer_gpu = false, test_a32_memory = false;
     bool leaderboard_writes = true;
-    bool offline = false;
+    bool offline = false, block_network = false;
     bool runtime_worker = false, console = false;
     std::uint32_t parent_pid = 0;
     double run_seconds = 0;
@@ -270,6 +270,7 @@ int main(int argc, char** argv) {
       else if (option == "--defer-gpu") defer_gpu = true;
       else if (option == "--no-leaderboard-writes") leaderboard_writes = false;
       else if (option == "--offline") offline = true;
+      else if (option == "--block-network") block_network = true;
       else if (option == "--test-a32-memory")
         test_a32_memory = true;
       else if (option == "--run-guest-test") guest_test = venture::paths::from_utf8(value());
@@ -303,7 +304,8 @@ int main(int argc, char** argv) {
                      "Account selection: --account <12-hex-key> (defaults to "
                      "active account)\n"
                      "Platform options: --no-leaderboard-writes (disable score submissions for this launch),\n"
-                     "  --offline (local Platform identity; no Meta requests)\n"
+                     "  --offline (local Platform identity; no Meta requests),\n"
+                     "  --block-network (the game reaches only this PC)\n"
                      "Diagnostic option: --defer-gpu (initialize graphics on "
                      "first guest use)\n"
                      "Memory test: --test-a32-memory (reserve low arena and "
@@ -470,6 +472,9 @@ int main(int argc, char** argv) {
     venture::configure_game(game, package,
                        account_key.empty() ? "local" : account_key);
     venture::process_config().platform_offline = offline;
+    venture::process_config().guest_network_blocked = block_network;
+    if (block_network)
+      venture::log::info("launch", "The game's network is blocked: only this PC is reachable.");
     if (offline)
       venture::log::info("accounts", "Offline mode: no Meta requests will be made for this launch.");
     venture::AddressSpace::get().initialize(venture::process_config().isa());

@@ -12,6 +12,9 @@ public:
                    std::shared_ptr<SecretStore>,
                    std::shared_ptr<HttpTransport>);
   Error prepare(std::stop_token = {});
+  // After prepare(): the account has a token but Meta could not be reached at
+  // all (no HTTP status), as when the PC has no internet.
+  bool meta_unreachable();
   venture::Json handle(const venture::Json &);
 
 private:

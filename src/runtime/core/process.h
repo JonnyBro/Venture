@@ -57,6 +57,9 @@ struct ProcessConfig {
   // Offline mode (launcher setting or --offline): games get a local Platform
   // identity and never contact Meta. Saves stay in the account's folder.
   bool platform_offline = false;
+  // --block-network: the game's own sockets, DNS and Java networking reach
+  // only this PC (loopback). Set with offline mode by the launcher.
+  bool guest_network_blocked = false;
   bool embedded_java_scripts = false; // tooling agent needed only for prepared Java loaders
   bool has_code = true; // classes.dex present; a native-only APK (hasCode="false") has none
   // VENTURE_PASSTHROUGH (on unless "0"), captured once before guest/XR initialization.

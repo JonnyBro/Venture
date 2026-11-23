@@ -177,6 +177,13 @@ bool start_jvm(const JvmOptions& options, std::string* error) {
     values.push_back("-Dventure.device.name=" + std::string(device.device));
     values.push_back("-Dventure.guest.abi=" + process_config().abi);
     values.push_back("-Dventure.device.memory=" + std::to_string(guest_usable_memory()));
+    // Java sockets bypass the guest libc, so --block-network routes them through
+    // a SOCKS proxy on a closed loopback port: every outside connection is
+    // refused at once, while socksNonProxyHosts keeps localhost direct.
+    if (process_config().guest_network_blocked) {
+      values.push_back("-DsocksProxyHost=127.0.0.1");
+      values.push_back("-DsocksProxyPort=9");
+    }
     std::vector<JavaVMOption> native;
     for (auto& value : values) native.push_back({value.data(), nullptr});
     JavaVMInitArgs args{JNI_VERSION_1_8, static_cast<jint>(native.size()), native.data(), JNI_FALSE};

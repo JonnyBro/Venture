@@ -128,6 +128,9 @@ struct Settings {
   // Runs installed games with a local Platform identity and makes no Meta
   // requests (Settings > Library). Downloads and online features need it off.
   bool offline_mode = false;
+  // In offline mode the game's own network is blocked too (--block-network):
+  // games without internet fail fast instead of waiting on timeouts.
+  bool block_game_network = false;
   // Whether the library lists `id`: not hidden, or hidden ones are shown.
   bool listed(std::string_view id) const { return show_hidden || !hidden.contains(std::string(id)); }
   // Starting a new game's install asks where it goes and whether it goes to

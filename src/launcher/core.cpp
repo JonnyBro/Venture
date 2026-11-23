@@ -1072,7 +1072,7 @@ void Core::add_owned() {
 }
 void Core::refresh() {
   if (options_.offline) {
-    notice_ = "Offline mode. Restart without --offline to connect to Meta.";
+    notice_ = "Offline mode. " + offline_hint() + " to connect to Meta.";
     return;
   }
   if (refreshing_ || !session_)
@@ -1190,7 +1190,7 @@ void Core::select(std::string id) {
 }
 void Core::sign_in() {
   if (options_.offline) {
-    notice_ = "Sign-in needs a connection. Restart without --offline.";
+    notice_ = "Sign-in needs a connection. " + offline_hint() + ".";
     return;
   }
   if (signing_in_)
@@ -1385,12 +1385,26 @@ void Core::set_show_hidden(bool show) {
   settings_.show_hidden = show;
   settings_.save(data_);
 }
-// The library's Installed filter, remembered without a rescan.
 void Core::set_offline_mode(bool enabled) {
+  const bool was_offline = options_.offline;
   settings_.offline_mode = enabled;
   options_.offline = offline_forced_ || enabled;
   settings_.save(data_);
+  // Back online: the library, accounts and add-ons were skipped while offline.
+  if (was_offline && !options_.offline) {
+    notice_.clear();
+    if (started_ && session_ && !options_.launch_requested)
+      refresh();
+  }
 }
+void Core::set_block_game_network(bool enabled) {
+  settings_.block_game_network = enabled;
+  settings_.save(data_);
+}
+std::string Core::offline_hint() const {
+  return offline_forced_ ? "Restart without --offline" : "Turn off offline mode in Settings";
+}
+// The library's Installed filter, remembered without a rescan.
 void Core::set_installed_only(bool installed_only) {
   if (installed_only == settings_.installed_only) return;
   settings_.installed_only = installed_only;
@@ -1760,6 +1774,7 @@ void Core::launch_game(std::string_view id, std::string_view requested,
       });
   std::string catalog_token;
   const bool offline = options_.offline;
+  const bool block_network = settings_.block_game_network;
   if (!offline && (!i->plan.launcher_format || no_assets || untyped_assets) && !i->plan.local &&
       !choice.account_key.empty())
     if (auto owner = vault_.load(choice.account_key))
@@ -1796,7 +1811,7 @@ void Core::launch_game(std::string_view id, std::string_view requested,
                 ? "Preparing application credentials..."
                 : "Updating the installation manifest from Meta...";
   worker_->submit([this, install, app_id, key, runtime, root, details, reply,
-                   console, catalog_token, offline](std::stop_token stop) -> Worker::Completion {
+                   console, catalog_token, offline, block_network](std::stop_token stop) -> Worker::Completion {
     try {
       if (reply) {
         std::lock_guard lock(reply->mutex);
@@ -1846,8 +1861,20 @@ void Core::launch_game(std::string_view id, std::string_view requested,
         throw std::runtime_error(error.message);
       if (stop.stop_requested())
         throw std::runtime_error("Game launch cancelled.");
+      bool fell_back = false;
+      if (!offline && broker->meta_unreachable()) {
+        log::warn("launcher", "Meta is unreachable; starting {} in offline mode.", app_id);
+        broker = std::make_shared<ovrplatform::CredentialBroker>(
+            identity, "local", ovrplatform::runtime_secret_store("local"),
+            ovrplatform::meta_http_transport());
+        if ((error = broker->prepare(stop)))
+          throw std::runtime_error(error.message);
+        fell_back = true;
+      }
+      const bool launch_offline = offline || fell_back;
       return [this, install, app_id, key, runtime, root, console, broker,
-              details, reply, offline, catalog = std::move(catalog)] {
+              details, reply, fell_back, block_network,
+              offline = launch_offline, catalog = std::move(catalog)] {
         launch_pending_.erase(app_id);
         if (reply && !reply->begin()) {
           game_locks_.erase(app_id);
@@ -1896,6 +1923,8 @@ void Core::launch_game(std::string_view id, std::string_view requested,
               "--parent-pid", std::to_string(current_process_id())};
           if (offline)
             args.push_back("--offline");
+          if (offline && block_network)
+            args.push_back("--block-network");
           if (console)
             args.push_back("--console");
           if (options_.smoke_seconds)
@@ -1927,7 +1956,7 @@ void Core::launch_game(std::string_view id, std::string_view requested,
           r.exit.reset();
           r.tail.clear();
           r.failure.clear();
-          notice_.clear();
+          notice_ = fell_back ? "Meta is unreachable, so the game started in offline mode." : "";
           if (auto entry = game(meta::base_app(app_id))) {
             entry->recent = uint64_t(std::chrono::system_clock::to_time_t(
                 std::chrono::system_clock::now()));

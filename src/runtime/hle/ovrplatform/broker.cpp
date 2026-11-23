@@ -305,6 +305,11 @@ Error CredentialBroker::prepare(std::stop_token stop) {
   std::lock_guard lock(mutex_);
   return prepare_locked(stop);
 }
+bool CredentialBroker::meta_unreachable() {
+  std::lock_guard lock(mutex_);
+  return !profile_.access_token.empty() && identity_.error.code == ErrorCode::unavailable &&
+         identity_.error.http_status == 0;
+}
 Error CredentialBroker::prepare_locked(std::stop_token stop) {
   // Never a launch gate: without an account the game still starts and its own
   // platform calls get that answer. Entitlement is never asked here, only when

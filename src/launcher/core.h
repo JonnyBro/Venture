@@ -200,6 +200,9 @@ protected:
   // Saves the offline-mode choice and applies it to this run too (--offline
   // still forces it on).
   void set_offline_mode(bool enabled);
+  void set_block_game_network(bool enabled);
+  // What to do to get online: --offline needs a restart, the setting does not.
+  std::string offline_hint() const;
   struct LaunchRequest {
     std::string target, account;
     LaunchDetails details;

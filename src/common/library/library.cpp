@@ -864,6 +864,7 @@ Settings Settings::load(const fs::path &data) {
   s.show_hidden = field(j, "showHiddenGames") == true;
   s.installed_only = field(j, "libraryInstalledOnly") == true;
   s.offline_mode = field(j, "offlineMode") == true;
+  s.block_game_network = field(j, "offlineBlockGameNetwork") == true;
   return s;
 }
 void Settings::save(const fs::path &data) const {
@@ -895,7 +896,8 @@ void Settings::save(const fs::path &data) const {
          {"hiddenGames", hidden},
          {"showHiddenGames", show_hidden},
          {"libraryInstalledOnly", installed_only},
-         {"offlineMode", offline_mode}};
+         {"offlineMode", offline_mode},
+         {"offlineBlockGameNetwork", block_game_network}};
   {
     Json games = Json::object();
     for (const auto& [id, config] : game_controls) games[id] = Json::parse(controls::encode(config));

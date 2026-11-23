@@ -3,6 +3,7 @@
 #include "abi32.h"
 #include "libc_a.h"
 #include "core/signals.h"
+#include "core/process.h"
 #include "common/environment.h"
 #include "common/log.h"
 #include <algorithm>
@@ -48,8 +49,40 @@ int resolve_async(std::shared_ptr<Job> job, Work work) {
   }
   return job->result;
 }
+// Offline mode with the game's network blocked (--block-network): only this
+// PC is reachable, so a game without internet fails at once instead of waiting
+// for its connect and DNS timeouts.
+bool network_blocked() { return process_config().guest_network_blocked; }
+bool local_address(const void* a, std::uint32_t n) {
+  if (!a || n < 2) return true;
+  const auto* b = static_cast<const unsigned char*>(a);
+  const int family = b[0] | (b[1] << 8);
+  if (family == 2) {
+    if (n < 8) return true;
+    return b[4] == 127 || (b[4] | b[5] | b[6] | b[7]) == 0;
+  }
+  if (family == 10) {
+    if (n < 24) return true;
+    const auto* ip = b + 8;
+    if (std::all_of(ip, ip + 15, [](unsigned char c) { return c == 0; })) return ip[15] <= 1;
+    const bool mapped = std::all_of(ip, ip + 10, [](unsigned char c) { return c == 0; }) &&
+                        ip[10] == 0xff && ip[11] == 0xff;
+    return mapped && (ip[12] == 127 || (ip[12] | ip[13] | ip[14] | ip[15]) == 0);
+  }
+  return true;
+}
+bool local_name(const char* node) {
+  if (!node || !*node) return true;
+  const std::string_view name(node);
+  if (name == "localhost" || name == "localhost." || name.ends_with(".localhost") ||
+      name.ends_with(".localhost."))
+    return true;
+  unsigned char address[16];
+  return host::inet_pton(2, node, address) == 1 || host::inet_pton(10, node, address) == 1;
+}
 int lookup_interruptible(const char* node, const char* service, int family, int type, int protocol,
                          int flags, std::vector<host::Lookup>& out) {
+  if (network_blocked() && !local_name(node)) return 2;  // EAI_AGAIN, as with no network
   struct Job {
     std::atomic<bool> done{false};
     int result = 0;
@@ -588,6 +621,10 @@ int listen_fn(int fd, int backlog) {
 int connect_fn(int fd, const void* a, std::uint32_t n) {
   auto f = socket_file(fd);
   if (!f) return socket_error(fd);
+  if (network_blocked() && !local_address(a, n)) {
+    if (trace_net) log::info("net-trace", "connect fd={} {} -> blocked", fd, trace_address(a, n));
+    return failure(err::enetunreach);
+  }
   int r = f->connect(a, n);
   if (trace_net) log::info("net-trace", "connect fd={} {} -> {}", fd, trace_address(a, n), r);
   if (r != -err::einprogress || (f->flags.load() & o_nonblock)) return result(r);
@@ -624,6 +661,7 @@ std::int64_t sendto_fn(int fd, const void* p, std::uint64_t n, int flags, const 
                        std::uint32_t size) {
   auto f = socket_file(fd);
   if (!f) return socket_error(fd);
+  if (a && network_blocked() && !local_address(a, size)) return failure(err::enetunreach);
   auto end = f->operation_deadline(true);
   for (;;) {
     auto r = f->send(p, n, flags | 0x40, a, size);
